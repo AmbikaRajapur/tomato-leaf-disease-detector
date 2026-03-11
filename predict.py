@@ -1,7 +1,18 @@
 import torch
-import torch.nn as nn
-from PIL import Image
-from torchvision import transforms
+import gdown
+import os
+
+MODEL_PATH = "model.pth"
+
+# Download model if not present
+if not os.path.exists(MODEL_PATH):
+
+    url = "https://drive.google.com/file/d/1-lXXV0iMHOEP-qaH3IptbKtcb5dffeG2/view?usp=sharing"
+
+    gdown.download(url, MODEL_PATH, quiet=False)
+
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+model.eval()
 
 # Classes
 classes = [
