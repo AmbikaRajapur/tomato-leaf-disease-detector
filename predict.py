@@ -55,7 +55,7 @@ if not os.path.exists(MODEL_PATH):
 
     gdown.download(url, MODEL_PATH, quiet=False)
 
-model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu", weights_only=False))
 model.eval()
 
 
@@ -110,5 +110,6 @@ def predict_disease(img_path):
 
     for i,c in enumerate(classes):
         prob_dict[c] = float(probs[0][i])
+
 
     return disease, confidence, prob_dict
