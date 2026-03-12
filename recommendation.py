@@ -1,25 +1,20 @@
 solutions = {
 
 "Early_Blight":
-"Fungal infection. Remove infected leaves and apply fungicide.",
+"Remove infected leaves and apply fungicide.",
 
 "Late_Blight":
-"Serious disease. Apply copper fungicide and avoid wet leaves.",
+"Use copper fungicide and avoid high humidity.",
 
 "Leaf_Mold":
-"Improve ventilation and reduce humidity.",
+"Improve air circulation around plants.",
 
 "Septoria":
 "Remove infected leaves and rotate crops.",
 
 "Healthy":
-"Leaf appears healthy. Maintain good watering."
-
+"Leaf is healthy. Maintain proper watering."
 }
 
 def get_solution(disease):
-
-    if disease == "Unknown / Not Tomato Leaf":
-        return "The system cannot detect a known tomato disease."
-
-    return solutions.get(disease,"No recommendation available.")
+    return solutions.get(disease,"No suggestion available")

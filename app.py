@@ -1,52 +1,20 @@
 import streamlit as st
 import requests
 from PIL import Image
-import pandas as pd
-import matplotlib.pyplot as plt
-
+import tempfile
+import os
 from predict import predict_disease
-from disease_info import disease_explanations
 
-# Page configuration
-st.set_page_config(
-    page_title="Tomato Disease Detector",
-    page_icon="🌿",
-    layout="wide"
-)
+st.title("AI Tomato Leaf Disease Detector")
 
-# Custom UI style
-st.markdown("""
-<style>
-.title{
-font-size:40px;
-font-weight:bold;
-color:#2E8B57;
-}
-.card{
-padding:20px;
-border-radius:12px;
-background-color:#f0f2f6;
-}
-</style>
-""", unsafe_allow_html=True)
+# Image upload
+uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
-# Title
-st.markdown('<p class="title">🌿 Tomato Disease Detection Dashboard</p>', unsafe_allow_html=True)
-st.write("Upload a tomato leaf image or paste an image URL to detect diseases using a CNN model.")
-
-# Sidebar
-st.sidebar.header("⚙ Input")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Upload Leaf Image",
-    type=["jpg","jpeg","png"]
-)
-
-url = st.sidebar.text_input("Or Enter Image URL")
+# URL input
+url = st.text_input("Or Enter Image URL")
 
 image = None
 
-# Load image
 if uploaded_file:
     image = Image.open(uploaded_file)
 
@@ -54,64 +22,36 @@ if url:
     response = requests.get(url, stream=True)
     image = Image.open(response.raw)
 
-# Main dashboard
 if image:
 
-    col1, col2 = st.columns(2)
+    st.image(image, caption="Input Image")
 
-    with col1:
-        st.subheader("📷 Input Image")
-        st.image(image, use_column_width=True)
+    temp_path = "temp.jpg"
+    image.save(temp_path)
 
-    image.save("temp.jpg")
+    disease, conf = predict_disease(temp_path)
 
-    disease, confidence, probs = predict_disease("temp.jpg")
+    st.subheader("Prediction")
 
-    with col2:
+    st.write("Result:", disease)
+    st.write("Confidence:", round(conf*100,2), "%")
 
-        st.subheader("🧠 AI Prediction")
+    # Label correction
+    label = st.selectbox(
+        "Correct label if prediction is wrong",
+        ["Early_Blight","Late_Blight","Leaf_Mold","Septoria","Healthy"]
+    )
 
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+    if st.button("Add to Dataset & Retrain"):
 
-        st.success(f"Detected Disease: **{disease}**")
+        save_folder = f"dataset/train/{label}"
 
-        st.metric(
-            label="Confidence Score",
-            value=f"{round(confidence*100,2)}%"
-        )
+        os.makedirs(save_folder, exist_ok=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        image.save(os.path.join(save_folder, "new_image.jpg"))
 
-    # Probability chart
-    st.subheader("📊 Prediction Probability")
+        st.success("Image added to dataset!")
 
-    df = pd.DataFrame({
-        "Disease": list(probs.keys()),
-        "Probability": list(probs.values())
-    })
+        os.system("python train_model.py")
 
-    fig, ax = plt.subplots()
-
-    ax.bar(df["Disease"], df["Probability"])
-
-    plt.xticks(rotation=45)
-
-    st.pyplot(fig)
-
-    # AI Explanation
-    st.subheader(" Explanation")
-
-    info = disease_explanations[disease]
-
-    st.write("###  Cause")
-    st.write(info["cause"])
-
-    st.write("###  Symptoms Detected")
-    st.write(info["symptoms"])
-
-    st.write("###  Recommended Solution")
-    st.write(info["solution"])
-
-else:
-
-    st.info("Upload an image or enter an image URL to start detection.")
+        st.success("Model retrained successfully!")
