@@ -1,69 +1,58 @@
-import torch
-import torch.nn as nn
+import streamlit as st
+import requests
 from PIL import Image
-from torchvision import transforms
+import tempfile
+import os
+from predict import predict_disease
 
-classes = [
-"Early_Blight",
-"Late_Blight",
-"Leaf_Mold",
-"Septoria",
-"Healthy"
-]
+st.title("AI Tomato Leaf Disease Detector")
 
-class CNNModel(nn.Module):
+# Image upload
+uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
-    def __init__(self):
-        super(CNNModel,self).__init__()
+# URL input
+url = st.text_input("Or Enter Image URL")
 
-        self.conv = nn.Sequential(
-            nn.Conv2d(3,32,3),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+image = None
 
-            nn.Conv2d(32,64,3),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
+# Load image
+if uploaded_file:
+    image = Image.open(uploaded_file).convert("RGB")
+elif url:
+    try:
+        response = requests.get(url, stream=True)
+        image = Image.open(response.raw).convert("RGB")
+    except:
+        st.error("Failed to load image from URL")
 
-            nn.Conv2d(64,128,3),
-            nn.ReLU(),
-            nn.MaxPool2d(2)
-        )
+if image:
+    st.image(image, caption="Input Image", use_column_width=True)
 
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(128*26*26,256),
-            nn.ReLU(),
-            nn.Linear(256,5)
-        )
+    # Temporary file for prediction
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        image.save(tmp.name)
+        disease, conf = predict_disease(tmp.name)
 
-    def forward(self,x):
-        x = self.conv(x)
-        x = self.fc(x)
-        return x
+    st.subheader("Prediction")
+    st.write("Result:", disease)
+    st.write("Confidence:", round(conf*100, 2), "%")
 
+    # Correct label option
+    label = st.selectbox(
+        "Correct label if prediction is wrong",
+        ["Early_Blight","Late_Blight","Leaf_Mold","Septoria","Healthy"]
+    )
 
-model = CNNModel()
-model.load_state_dict(torch.load("model.pth", map_location="cpu"))
-model.eval()
+    if st.button("Add to Dataset & Retrain"):
+        save_folder = f"dataset/train/{label}"
+        os.makedirs(save_folder, exist_ok=True)
+        image.save(os.path.join(save_folder, "new_image.jpg"))
 
-transform = transforms.Compose([
-    transforms.Resize((224,224)),
-    transforms.ToTensor()
-])
+        st.success("Image added to dataset!")
 
-def predict_disease(img_path):
-
-    img = Image.open(img_path).convert("RGB")
-
-    img = transform(img)
-
-    img = img.unsqueeze(0)
-
-    output = model(img)
-
-    probs = torch.softmax(output,1)
-
-    conf, pred = torch.max(probs,1)
-
-    return classes[pred.item()], conf.item()
+        # Retraining warning
+        try:
+            os.system("python train_model.py")
+            st.success("Model retrained successfully!")
+        except:
+            st.warning("Retraining may not work on Streamlit Cloud. Try retraining locally.")
