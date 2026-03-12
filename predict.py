@@ -1,58 +1,59 @@
-import streamlit as st
-import requests
-from PIL import Image
-import tempfile
+import torch
+import torch.nn as nn
 import os
-from predict import predict_disease
+import gdown
+import streamlit as st
+from PIL import Image
+import torchvision.transforms as transforms
 
-st.title("AI Tomato Leaf Disease Detector")
+# Define CNN model
+class TomatoCNN(nn.Module):
+    def __init__(self, num_classes=5):
+        super(TomatoCNN, self).__init__()
+        self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
+        self.fc1 = nn.Linear(32 * 64 * 64, 128)
+        self.fc2 = nn.Linear(128, num_classes)
+        self.relu = nn.ReLU()
+    
+    def forward(self, x):
+        x = self.pool(self.relu(self.conv1(x)))
+        x = self.pool(self.relu(self.conv2(x)))
+        x = x.view(-1, 32 * 64 * 64)
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
-# Image upload
-uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
+# Initialize model
+model = TomatoCNN(num_classes=5)
 
-# URL input
-url = st.text_input("Or Enter Image URL")
+# Model path & URL (replace with your own)
+MODEL_PATH = "model.pth"
+MODEL_URL = "YOUR_MODEL_FILE_URL"  # e.g., Google Drive or HuggingFace link
 
-image = None
+# Download model if missing
+if not os.path.exists(MODEL_PATH):
+    st.warning("Downloading model...")
+    gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
 
-# Load image
-if uploaded_file:
-    image = Image.open(uploaded_file).convert("RGB")
-elif url:
-    try:
-        response = requests.get(url, stream=True)
-        image = Image.open(response.raw).convert("RGB")
-    except:
-        st.error("Failed to load image from URL")
+# Load model weights
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+model.eval()
 
-if image:
-    st.image(image, caption="Input Image", use_column_width=True)
+# Labels
+labels = ["Early_Blight","Late_Blight","Leaf_Mold","Septoria","Healthy"]
 
-    # Temporary file for prediction
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-        image.save(tmp.name)
-        disease, conf = predict_disease(tmp.name)
-
-    st.subheader("Prediction")
-    st.write("Result:", disease)
-    st.write("Confidence:", round(conf*100, 2), "%")
-
-    # Correct label option
-    label = st.selectbox(
-        "Correct label if prediction is wrong",
-        ["Early_Blight","Late_Blight","Leaf_Mold","Septoria","Healthy"]
-    )
-
-    if st.button("Add to Dataset & Retrain"):
-        save_folder = f"dataset/train/{label}"
-        os.makedirs(save_folder, exist_ok=True)
-        image.save(os.path.join(save_folder, "new_image.jpg"))
-
-        st.success("Image added to dataset!")
-
-        # Retraining warning
-        try:
-            os.system("python train_model.py")
-            st.success("Model retrained successfully!")
-        except:
-            st.warning("Retraining may not work on Streamlit Cloud. Try retraining locally.")
+# Prediction function
+def predict_disease(image_path):
+    image = Image.open(image_path).convert("RGB")
+    transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.ToTensor()
+    ])
+    img_tensor = transform(image).unsqueeze(0)
+    with torch.no_grad():
+        outputs = model(img_tensor)
+        probs = torch.softmax(outputs, dim=1)
+        conf, pred = torch.max(probs, 1)
+    return labels[pred.item()], conf.item()
