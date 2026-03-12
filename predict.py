@@ -1,87 +1,99 @@
 import torch
 import torch.nn as nn
-import os
-import gdown
-import streamlit as st
 from PIL import Image
-import torchvision.transforms as transforms
+from torchvision import transforms
+import requests
+from io import BytesIO
 
 # ----------------------------
-# Define CNN model
+# Classes and Prevention Tips
 # ----------------------------
-class TomatoCNN(nn.Module):
-    def __init__(self, num_classes=5):
-        super(TomatoCNN, self).__init__()
-        self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
-        self.fc1 = nn.Linear(32 * 64 * 64, 128)
-        self.fc2 = nn.Linear(128, num_classes)
-        self.relu = nn.ReLU()
-    
-    def forward(self, x):
-        x = self.pool(self.relu(self.conv1(x)))
-        x = self.pool(self.relu(self.conv2(x)))
-        x = x.view(-1, 32 * 64 * 64)
-        x = self.relu(self.fc1(x))
-        x = self.fc2(x)
+classes = [
+    "Early_Blight",
+    "Late_Blight",
+    "Leaf_Mold",
+    "Septoria",
+    "Healthy"
+]
+
+prevention_tips = {
+    "Early_Blight": "Remove infected leaves, avoid overhead watering, rotate crops, and apply fungicides if necessary.",
+    "Late_Blight": "Use resistant varieties, avoid wet conditions, and apply fungicides early.",
+    "Leaf_Mold": "Improve air circulation, avoid excessive nitrogen, and use fungicide sprays if needed.",
+    "Septoria": "Remove infected leaves, rotate crops, and avoid wetting leaves.",
+    "Healthy": "Plant is healthy. Continue regular care and monitoring."
+}
+
+# ----------------------------
+# CNN Model Definition
+# ----------------------------
+class CNNModel(nn.Module):
+    def __init__(self):
+        super(CNNModel,self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(3,32,3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32,64,3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(64,128,3),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128*26*26,256),
+            nn.ReLU(),
+            nn.Linear(256,5)
+        )
+
+    def forward(self,x):
+        x = self.conv(x)
+        x = self.fc(x)
         return x
 
 # ----------------------------
-# Initialize model
-# ----------------------------
-model = TomatoCNN(num_classes=5)
-
-# ----------------------------
-# Model path & URL
+# Load Model
 # ----------------------------
 MODEL_PATH = "model.pth"
-MODEL_URL = "https://drive.google.com/uc?id=YOUR_FILE_ID"  # Replace with your Google Drive file ID
+model = CNNModel()
+model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
+model.eval()
 
 # ----------------------------
-# Safe download function
+# Image Transform
 # ----------------------------
-def download_model():
-    try:
-        st.info("Downloading model...")
-        gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
-        st.success("Model downloaded successfully!")
-    except Exception as e:
-        st.error(f"Failed to download model. Check MODEL_URL.\nError: {e}")
+transform = transforms.Compose([
+    transforms.Resize((224,224)),
+    transforms.ToTensor()
+])
 
 # ----------------------------
-# Check and load model
+# Prediction Function
 # ----------------------------
-if not os.path.exists(MODEL_PATH):
-    download_model()
-
-if os.path.exists(MODEL_PATH):
-    model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
-    model.eval()
-else:
-    st.warning("Model file not found. Prediction will not work until the model is available.")
-
-# ----------------------------
-# Labels
-# ----------------------------
-labels = ["Early_Blight","Late_Blight","Leaf_Mold","Septoria","Healthy"]
-
-# ----------------------------
-# Prediction function
-# ----------------------------
-def predict_disease(image_path):
-    if not os.path.exists(MODEL_PATH):
-        st.error("Model not available. Cannot predict.")
-        return "Unknown", 0.0
+def predict_disease(image_input):
+    """
+    image_input: image path or URL
+    returns: disease_name, confidence, prevention_tip
+    """
+    # Load image
+    if str(image_input).startswith("http"):
+        response = requests.get(image_input)
+        img = Image.open(BytesIO(response.content)).convert("RGB")
+    else:
+        img = Image.open(image_input).convert("RGB")
     
-    image = Image.open(image_path).convert("RGB")
-    transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.ToTensor()
-    ])
-    img_tensor = transform(image).unsqueeze(0)
+    # Preprocess
+    img_tensor = transform(img).unsqueeze(0)
+
+    # Predict
     with torch.no_grad():
-        outputs = model(img_tensor)
-        probs = torch.softmax(outputs, dim=1)
+        output = model(img_tensor)
+        probs = torch.softmax(output, dim=1)
         conf, pred = torch.max(probs, 1)
-    return labels[pred.item()], conf.item()
+        disease_name = classes[pred.item()]
+        confidence = conf.item()
+        prevention = prevention_tips.get(disease_name, "No info available.")
+    
+    return img, disease_name, confidence, prevention
