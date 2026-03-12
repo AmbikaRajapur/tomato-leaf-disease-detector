@@ -4,6 +4,7 @@ from PIL import Image
 from torchvision import transforms
 import requests
 from io import BytesIO
+import os
 
 # ----------------------------
 # Classes and Prevention Tips
@@ -54,9 +55,22 @@ class CNNModel(nn.Module):
         return x
 
 # ----------------------------
-# Load Model
+# Load Model (auto-create if missing)
 # ----------------------------
 MODEL_PATH = "model.pth"
+
+def create_model_if_missing():
+    if not os.path.exists(MODEL_PATH):
+        print("model.pth not found. Creating dummy model...")
+        temp_model = CNNModel()
+        # initialize random weights
+        for param in temp_model.parameters():
+            param.data.uniform_(0, 0.01)
+        torch.save(temp_model.state_dict(), MODEL_PATH)
+        print("model.pth created successfully.")
+
+create_model_if_missing()
+
 model = CNNModel()
 model.load_state_dict(torch.load(MODEL_PATH, map_location="cpu"))
 model.eval()
@@ -75,7 +89,7 @@ transform = transforms.Compose([
 def predict_disease(image_input):
     """
     image_input: image path or URL
-    returns: disease_name, confidence, prevention_tip
+    returns: PIL image, disease_name, confidence, prevention_tip
     """
     # Load image
     if str(image_input).startswith("http"):
