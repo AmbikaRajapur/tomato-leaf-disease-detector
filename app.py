@@ -3,6 +3,8 @@ from PIL import Image
 import tempfile
 import os
 from predict import predict_disease, MODEL_PATH
+from disease_info import disease_explanations
+from recommendation import get_solution
 
 st.title("🍅 AI Tomato Leaf Disease Detector")
 
@@ -37,8 +39,13 @@ if image:
     st.markdown(f"**Detected Disease:** {disease}")
     st.markdown(f"**Confidence:** {round(conf*100,2)} %")
 
-    st.subheader("How to prevent / manage this disease:")
-    st.markdown(prevention)
+    # Show detailed disease info
+    info = disease_explanations.get(disease)
+    if info:
+        st.subheader("Disease Information")
+        st.markdown(f"**Cause:** {info['cause']}")
+        st.markdown(f"**Symptoms:** {info['symptoms']}")
+        st.markdown(f"**Solution:** {get_solution(disease)}")
 
 else:
     st.info("Upload an image or enter an image URL to detect disease.")
