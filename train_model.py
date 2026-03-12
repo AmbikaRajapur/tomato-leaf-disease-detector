@@ -1,3 +1,4 @@
+#train_model.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -129,4 +130,5 @@ img, disease, conf, prevention = predict_image(test_image)
 img.show(title="Input Image")
 print("Detected Disease:", disease)
 print("Confidence:", round(conf*100,2), "%")
+
 print("How to prevent/manage:", prevention)
