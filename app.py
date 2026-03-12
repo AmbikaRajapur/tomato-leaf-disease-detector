@@ -1,3 +1,4 @@
+#app.py
 import streamlit as st
 from PIL import Image
 import tempfile
@@ -49,3 +50,4 @@ if image:
 
 else:
     st.info("Upload an image or enter an image URL to detect disease.")
+
